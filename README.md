@@ -27,3 +27,5 @@ pnpm typecheck
 ```
 
 Planning docs live in `docs/todos/`.
+
+See `docs/public-api.md` for public import boundaries and the pre-1.0 API stability policy.

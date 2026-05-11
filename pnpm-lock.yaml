@@ -26,7 +26,11 @@ importers:
 
   packages/create-kiln: {}
 
-  packages/http: {}
+  packages/http:
+    dependencies:
+      hono:
+        specifier: ^4.12.18
+        version: 4.12.18
 
   packages/testing: {}
 
