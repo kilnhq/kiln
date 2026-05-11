@@ -18,7 +18,11 @@ importers:
 
   packages/container: {}
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      hono:
+        specifier: ^4.12.18
+        version: 4.12.18
 
   packages/create-kiln: {}
 
@@ -28,11 +32,17 @@ importers:
 
 packages:
 
+  hono@4.12.18:
+    resolution: {integrity: sha512-RWzP96k/yv0PQfyXnWjs6zot20TqfpfsNXhOnev8d1InAxubW93L11/oNUc3tQqn2G0bSdAOBpX+2uDFHV7kdQ==}
+    engines: {node: '>=16.9.0'}
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
 snapshots:
+
+  hono@4.12.18: {}
 
   typescript@5.9.3: {}
