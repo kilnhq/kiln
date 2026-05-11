@@ -110,3 +110,16 @@ test("RouteCollection stores route names as metadata", () => {
   assert.equal(route.nameValue, "dashboard");
   assert.equal(routes.routes[0]?.nameValue, "dashboard");
 });
+
+test("RouteCollection stores route middleware as metadata", () => {
+  const routes = new RouteCollection();
+  const middleware = { handle() {} };
+
+  const route = routes
+    .get("/dashboard", (c) => c.text("Dashboard"))
+    .middleware("auth")
+    .middleware(["throttle", middleware]);
+
+  assert.deepEqual(route.middlewareValues, ["auth", "throttle", middleware]);
+  assert.deepEqual(routes.routes[0]?.middlewareValues, ["auth", "throttle", middleware]);
+});

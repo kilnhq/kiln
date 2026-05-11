@@ -8,10 +8,13 @@ export type InlineHandler<Env extends object = Record<string, unknown>> = (
   context: Context<{ Bindings: Env }>,
 ) => Response | Promise<Response>;
 
+export type MiddlewareReference = string | object;
+
 export class RouteDefinition<Env extends object = Record<string, unknown>> {
   readonly method: HttpMethod;
   readonly path: string;
   readonly handler: InlineHandler<Env>;
+  readonly middlewareValues: MiddlewareReference[] = [];
   nameValue?: string;
 
   constructor(method: HttpMethod, path: string, handler: InlineHandler<Env>) {
@@ -22,6 +25,11 @@ export class RouteDefinition<Env extends object = Record<string, unknown>> {
 
   name(name: string): this {
     this.nameValue = name;
+    return this;
+  }
+
+  middleware(middleware: MiddlewareReference | MiddlewareReference[]): this {
+    this.middlewareValues.push(...normalizeArray(middleware));
     return this;
   }
 }
@@ -124,4 +132,8 @@ function joinPaths(paths: string[]): string {
     .join("/");
 
   return joined ? `/${joined}` : "/";
+}
+
+function normalizeArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value];
 }
