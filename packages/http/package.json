@@ -9,12 +9,17 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --experimental-strip-types src/index.ts",
+    "test": "node --test --experimental-strip-types test/**/*.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write ."
+  },
+  "dependencies": {
+    "hono": "^4.12.18"
   }
 }
