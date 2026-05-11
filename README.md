@@ -6,7 +6,38 @@ The framework is planned around Hono for HTTP, Drizzle for database access, Bett
 
 ## Status
 
-This repository is in the foundation phase. The current focus is the monorepo structure and package boundaries before implementing the HTTP runtime.
+This repository is in the early HTTP runtime phase. The current code supports a minimal Hono-backed app runtime and route collection API.
+
+## Current Example
+
+```ts
+import { createApp } from "@kiln/core";
+import { Route, registerRoutes } from "@kiln/http";
+
+Route.get("/", (c) => c.json({ ok: true })).name("home");
+
+Route.prefix("/api").group(() => {
+  Route.get("/projects/:id", (c) => {
+    return c.json({ id: c.req.param("id") });
+  }).middleware("auth");
+});
+
+const app = createApp({
+  routes: (hono) => registerRoutes(hono),
+});
+
+export default app.worker();
+```
+
+Advanced users can keep the standard Cloudflare Worker shape and delegate to the same runtime:
+
+```ts
+export default {
+  fetch: app.fetch,
+};
+```
+
+Route middleware is metadata-only right now. The middleware pipeline is planned next.
 
 ## Packages
 
