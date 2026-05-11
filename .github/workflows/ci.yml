@@ -29,6 +29,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Runtime import check
+        run: pnpm check:runtime
+
       - name: Test
         run: pnpm test
 
