@@ -2,7 +2,7 @@ import type { Context, Hono } from "hono";
 
 export const KILN_HTTP_PACKAGE = "@kiln/http";
 
-export type HttpMethod = "GET" | "POST";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type InlineHandler<Env extends object = Record<string, unknown>> = (
   context: Context<{ Bindings: Env }>,
@@ -25,6 +25,18 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
     return this.add("POST", path, handler);
   }
 
+  put(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
+    return this.add("PUT", path, handler);
+  }
+
+  patch(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
+    return this.add("PATCH", path, handler);
+  }
+
+  delete(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
+    return this.add("DELETE", path, handler);
+  }
+
   register(hono: Hono<{ Bindings: Env }>): void {
     for (const route of this.routes) {
       if (route.method === "GET") {
@@ -33,6 +45,18 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
 
       if (route.method === "POST") {
         hono.post(route.path, route.handler);
+      }
+
+      if (route.method === "PUT") {
+        hono.put(route.path, route.handler);
+      }
+
+      if (route.method === "PATCH") {
+        hono.patch(route.path, route.handler);
+      }
+
+      if (route.method === "DELETE") {
+        hono.delete(route.path, route.handler);
       }
     }
   }
