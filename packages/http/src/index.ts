@@ -2,6 +2,38 @@ import type { Context, Hono } from "hono";
 
 export const KILN_HTTP_PACKAGE = "@kiln/http";
 
+export const response = {
+  json(data: unknown, status = 200): Response {
+    return Response.json(data, { status });
+  },
+
+  text(body: string, status = 200): Response {
+    return new Response(body, {
+      status,
+      headers: { "content-type": "text/plain; charset=UTF-8" },
+    });
+  },
+
+  html(body: string, status = 200): Response {
+    return new Response(body, {
+      status,
+      headers: { "content-type": "text/html; charset=UTF-8" },
+    });
+  },
+
+  redirect(to: string, status = 302): Response {
+    return Response.redirect(to, status);
+  },
+
+  notFound(body: unknown = { message: "Not Found" }): Response {
+    return Response.json(body, { status: 404 });
+  },
+
+  noContent(): Response {
+    return new Response(null, { status: 204 });
+  },
+};
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type InlineHandler<Env extends object = Record<string, unknown>> = (
