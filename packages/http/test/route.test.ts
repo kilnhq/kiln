@@ -123,3 +123,64 @@ test("RouteCollection stores route middleware as metadata", () => {
   assert.deepEqual(route.middlewareValues, ["auth", "throttle", middleware]);
   assert.deepEqual(routes.routes[0]?.middlewareValues, ["auth", "throttle", middleware]);
 });
+
+test("RouteCollection executes named route middleware", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+  const calls: string[] = [];
+
+  routes.middleware("auth", async (_c, next) => {
+    calls.push("before");
+    const response = await next();
+    calls.push("after");
+    return response;
+  });
+
+  routes.get("/dashboard", (c) => {
+    calls.push("handler");
+    return c.json({ ok: true });
+  }).middleware("auth");
+
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/dashboard");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.deepEqual(calls, ["before", "handler", "after"]);
+});
+
+test("RouteCollection supports middleware early returns", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.middleware("auth", (c) => c.json({ message: "Unauthorized" }, 401));
+  routes.get("/dashboard", (c) => c.json({ ok: true })).middleware("auth");
+
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/dashboard");
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { message: "Unauthorized" });
+});
+
+test("RouteCollection supports class middleware objects", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.get("/dashboard", (c) => c.json({ ok: true })).middleware({
+    async handle(c, next) {
+      const response = await next();
+      response.headers.set("x-middleware", "ran");
+      return response;
+    },
+  });
+
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/dashboard");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware"), "ran");
+});
