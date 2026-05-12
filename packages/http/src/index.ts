@@ -40,6 +40,14 @@ export type InlineHandler<Env extends object = Record<string, unknown>> = (
   context: Context<{ Bindings: Env }>,
 ) => Response | Promise<Response>;
 
+export type ControllerConstructor = new () => object;
+
+export type ControllerAction = [ControllerConstructor, string];
+
+export type RouteAction<Env extends object = Record<string, unknown>> =
+  | InlineHandler<Env>
+  | ControllerAction;
+
 export type NextFunction = () => Promise<Response>;
 
 export type MiddlewareHandler<Env extends object = Record<string, unknown>> = (
@@ -59,14 +67,14 @@ export type MiddlewareReference<Env extends object = Record<string, unknown>> =
 export class RouteDefinition<Env extends object = Record<string, unknown>> {
   readonly method: HttpMethod;
   readonly path: string;
-  readonly handler: InlineHandler<Env>;
+  readonly action: RouteAction<Env>;
   readonly middlewareValues: MiddlewareReference<Env>[] = [];
   nameValue?: string;
 
-  constructor(method: HttpMethod, path: string, handler: InlineHandler<Env>) {
+  constructor(method: HttpMethod, path: string, action: RouteAction<Env>) {
     this.method = method;
     this.path = path;
-    this.handler = handler;
+    this.action = action;
   }
 
   name(name: string): this {
@@ -83,7 +91,7 @@ export class RouteDefinition<Env extends object = Record<string, unknown>> {
 export interface RouteRecord<Env extends object = Record<string, unknown>> {
   method: HttpMethod;
   path: string;
-  handler: InlineHandler<Env>;
+  action: RouteAction<Env>;
   name?: string;
 }
 
@@ -92,24 +100,24 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
   private readonly prefixes: string[] = [];
   private readonly namedMiddleware = new Map<string, MiddlewareHandler<Env>>();
 
-  get(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
-    return this.add("GET", path, handler);
+  get(path: string, action: RouteAction<Env>): RouteDefinition<Env> {
+    return this.add("GET", path, action);
   }
 
-  post(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
-    return this.add("POST", path, handler);
+  post(path: string, action: RouteAction<Env>): RouteDefinition<Env> {
+    return this.add("POST", path, action);
   }
 
-  put(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
-    return this.add("PUT", path, handler);
+  put(path: string, action: RouteAction<Env>): RouteDefinition<Env> {
+    return this.add("PUT", path, action);
   }
 
-  patch(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
-    return this.add("PATCH", path, handler);
+  patch(path: string, action: RouteAction<Env>): RouteDefinition<Env> {
+    return this.add("PATCH", path, action);
   }
 
-  delete(path: string, handler: InlineHandler<Env>): RouteDefinition<Env> {
-    return this.add("DELETE", path, handler);
+  delete(path: string, action: RouteAction<Env>): RouteDefinition<Env> {
+    return this.add("DELETE", path, action);
   }
 
   prefix(prefix: string): { group: (callback: () => void) => void } {
@@ -177,7 +185,7 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
       const current = middleware[position];
 
       if (!current) {
-        return route.handler(context);
+        return dispatchAction(route.action, context);
       }
 
       return current(context, () => dispatch(position + 1));
@@ -203,9 +211,9 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
   private add(
     method: HttpMethod,
     path: string,
-    handler: InlineHandler<Env>,
+    action: RouteAction<Env>,
   ): RouteDefinition<Env> {
-    const route = new RouteDefinition(method, joinPaths([...this.prefixes, path]), handler);
+    const route = new RouteDefinition(method, joinPaths([...this.prefixes, path]), action);
     this.routes.push(route);
     return route;
   }
@@ -243,4 +251,23 @@ function normalizeMiddleware<Env extends object>(
   }
 
   return (context, next) => middleware.handle(context, next);
+}
+
+async function dispatchAction<Env extends object>(
+  action: RouteAction<Env>,
+  context: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  if (typeof action === "function") {
+    return action(context);
+  }
+
+  const [Controller, method] = action;
+  const controller = new Controller();
+  const handler = (controller as Record<string, unknown>)[method];
+
+  if (typeof handler !== "function") {
+    throw new Error(`Controller method not found: ${Controller.name}.${method}`);
+  }
+
+  return handler.call(controller, context) as Response | Promise<Response>;
 }

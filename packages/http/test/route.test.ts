@@ -184,3 +184,36 @@ test("RouteCollection supports class middleware objects", async () => {
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware"), "ran");
 });
+
+test("RouteCollection dispatches controller action tuples", async () => {
+  class UserController {
+    show(c: { req: { param: (name: string) => string } }) {
+      return Response.json({ id: c.req.param("id") });
+    }
+  }
+
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.get("/users/:id", [UserController, "show"]);
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/users/123");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { id: "123" });
+});
+
+test("RouteCollection errors when controller method is missing", async () => {
+  class UserController {}
+
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.get("/users/:id", [UserController, "show"]);
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/users/123");
+
+  assert.equal(response.status, 500);
+});
