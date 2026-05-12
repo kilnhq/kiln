@@ -36,8 +36,26 @@ export const response = {
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+export class RequestContext<Env extends object = Record<string, unknown>> {
+  readonly raw: Context<{ Bindings: Env }>;
+  readonly env: Env;
+  readonly params: Record<string, string>;
+  readonly request: {
+    header: (name: string) => string | undefined;
+  };
+
+  constructor(raw: Context<{ Bindings: Env }>) {
+    this.raw = raw;
+    this.env = raw.env;
+    this.params = raw.req.param() as Record<string, string>;
+    this.request = {
+      header: (name) => raw.req.header(name),
+    };
+  }
+}
+
 export type InlineHandler<Env extends object = Record<string, unknown>> = (
-  context: Context<{ Bindings: Env }>,
+  context: RequestContext<Env>,
 ) => Response | Promise<Response>;
 
 export type ControllerConstructor = new () => object;
@@ -51,7 +69,7 @@ export type RouteAction<Env extends object = Record<string, unknown>> =
 export type NextFunction = () => Promise<Response>;
 
 export type MiddlewareHandler<Env extends object = Record<string, unknown>> = (
-  context: Context<{ Bindings: Env }>,
+  context: RequestContext<Env>,
   next: NextFunction,
 ) => Response | Promise<Response>;
 
@@ -169,6 +187,7 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
     context: Context<{ Bindings: Env }>,
     route: RouteDefinition<Env>,
   ): Promise<Response> {
+    const requestContext = new RequestContext(context);
     const middleware = route.middlewareValues.map((reference) => {
       return this.resolveMiddleware(reference);
     });
@@ -185,10 +204,10 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
       const current = middleware[position];
 
       if (!current) {
-        return dispatchAction(route.action, context);
+        return dispatchAction(route.action, requestContext);
       }
 
-      return current(context, () => dispatch(position + 1));
+      return current(requestContext, () => dispatch(position + 1));
     };
 
     return dispatch(0);
@@ -255,7 +274,7 @@ function normalizeMiddleware<Env extends object>(
 
 async function dispatchAction<Env extends object>(
   action: RouteAction<Env>,
-  context: Context<{ Bindings: Env }>,
+  context: RequestContext<Env>,
 ): Promise<Response> {
   if (typeof action === "function") {
     return action(context);

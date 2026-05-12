@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
-import { RouteCollection, registerRoutes } from "../src/index.ts";
+import { response as httpResponse, RouteCollection, registerRoutes } from "../src/index.ts";
 
 test("RouteCollection registers GET routes onto Hono", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.get("/users/:id", (c) => c.json({ id: c.req.param("id") }));
+  routes.get("/users/:id", (ctx) => httpResponse.json({ id: ctx.params.id }));
   registerRoutes(hono, routes);
 
   const response = await hono.request("/users/123");
@@ -20,7 +20,7 @@ test("RouteCollection registers POST routes onto Hono", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.post("/users", (c) => c.json({ created: true }, 201));
+  routes.post("/users", () => httpResponse.json({ created: true }, 201));
   registerRoutes(hono, routes);
 
   const response = await hono.request("/users", { method: "POST" });
@@ -33,7 +33,7 @@ test("RouteCollection registers PUT routes onto Hono", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.put("/users/:id", (c) => c.json({ updated: c.req.param("id") }));
+  routes.put("/users/:id", (ctx) => httpResponse.json({ updated: ctx.params.id }));
   registerRoutes(hono, routes);
 
   const response = await hono.request("/users/123", { method: "PUT" });
@@ -46,7 +46,7 @@ test("RouteCollection registers PATCH routes onto Hono", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.patch("/users/:id", (c) => c.json({ patched: c.req.param("id") }));
+  routes.patch("/users/:id", (ctx) => httpResponse.json({ patched: ctx.params.id }));
   registerRoutes(hono, routes);
 
   const response = await hono.request("/users/123", { method: "PATCH" });
@@ -59,7 +59,7 @@ test("RouteCollection registers DELETE routes onto Hono", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.delete("/users/:id", (c) => c.json({ deleted: c.req.param("id") }));
+  routes.delete("/users/:id", (ctx) => httpResponse.json({ deleted: ctx.params.id }));
   registerRoutes(hono, routes);
 
   const response = await hono.request("/users/123", { method: "DELETE" });
@@ -73,7 +73,7 @@ test("RouteCollection registers prefixed route groups", async () => {
   const hono = new Hono();
 
   routes.prefix("/api").group(() => {
-    routes.get("/projects/:id", (c) => c.json({ project: c.req.param("id") }));
+    routes.get("/projects/:id", (ctx) => httpResponse.json({ project: ctx.params.id }));
   });
 
   registerRoutes(hono, routes);
@@ -90,7 +90,7 @@ test("RouteCollection supports nested prefixed route groups", async () => {
 
   routes.prefix("api").group(() => {
     routes.prefix("v1").group(() => {
-      routes.get("status", (c) => c.json({ ok: true }));
+      routes.get("status", () => httpResponse.json({ ok: true }));
     });
   });
 
@@ -105,7 +105,7 @@ test("RouteCollection supports nested prefixed route groups", async () => {
 test("RouteCollection stores route names as metadata", () => {
   const routes = new RouteCollection();
 
-  const route = routes.get("/dashboard", (c) => c.text("Dashboard")).name("dashboard");
+  const route = routes.get("/dashboard", () => httpResponse.text("Dashboard")).name("dashboard");
 
   assert.equal(route.nameValue, "dashboard");
   assert.equal(routes.routes[0]?.nameValue, "dashboard");
@@ -116,7 +116,7 @@ test("RouteCollection stores route middleware as metadata", () => {
   const middleware = { handle() {} };
 
   const route = routes
-    .get("/dashboard", (c) => c.text("Dashboard"))
+    .get("/dashboard", () => httpResponse.text("Dashboard"))
     .middleware("auth")
     .middleware(["throttle", middleware]);
 
@@ -136,9 +136,9 @@ test("RouteCollection executes named route middleware", async () => {
     return response;
   });
 
-  routes.get("/dashboard", (c) => {
+  routes.get("/dashboard", () => {
     calls.push("handler");
-    return c.json({ ok: true });
+    return httpResponse.json({ ok: true });
   }).middleware("auth");
 
   registerRoutes(hono, routes);
@@ -154,8 +154,8 @@ test("RouteCollection supports middleware early returns", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.middleware("auth", (c) => c.json({ message: "Unauthorized" }, 401));
-  routes.get("/dashboard", (c) => c.json({ ok: true })).middleware("auth");
+  routes.middleware("auth", () => httpResponse.json({ message: "Unauthorized" }, 401));
+  routes.get("/dashboard", () => httpResponse.json({ ok: true })).middleware("auth");
 
   registerRoutes(hono, routes);
 
@@ -169,8 +169,8 @@ test("RouteCollection supports class middleware objects", async () => {
   const routes = new RouteCollection();
   const hono = new Hono();
 
-  routes.get("/dashboard", (c) => c.json({ ok: true })).middleware({
-    async handle(c, next) {
+  routes.get("/dashboard", () => httpResponse.json({ ok: true })).middleware({
+    async handle(_ctx, next) {
       const response = await next();
       response.headers.set("x-middleware", "ran");
       return response;
@@ -187,8 +187,8 @@ test("RouteCollection supports class middleware objects", async () => {
 
 test("RouteCollection dispatches controller action tuples", async () => {
   class UserController {
-    show(c: { req: { param: (name: string) => string } }) {
-      return Response.json({ id: c.req.param("id") });
+    show(ctx: { params: Record<string, string> }) {
+      return httpResponse.json({ id: ctx.params.id });
     }
   }
 
