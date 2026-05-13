@@ -41,16 +41,47 @@ export class RequestContext<Env extends object = Record<string, unknown>> {
   readonly env: Env;
   readonly params: Record<string, string>;
   readonly request: {
+    cookie: (name: string) => string | undefined;
     header: (name: string) => string | undefined;
+    input: (key: string) => Promise<unknown>;
+    ip: () => string | undefined;
+    only: (keys: string[]) => Promise<Record<string, unknown>>;
   };
+  inputData?: Promise<Record<string, unknown>>;
 
   constructor(raw: Context<{ Bindings: Env }>) {
     this.raw = raw;
     this.env = raw.env;
     this.params = raw.req.param() as Record<string, string>;
     this.request = {
+      cookie: (name) => parseCookies(raw.req.header("cookie"))[name],
       header: (name) => raw.req.header(name),
+      input: async (key) => {
+        return (await this.allInput())[key];
+      },
+      ip: () => {
+        return raw.req.header("cf-connecting-ip")
+          ?? raw.req.header("x-forwarded-for")?.split(",")[0]?.trim()
+          ?? raw.req.header("x-real-ip");
+      },
+      only: async (keys) => {
+        const input = await this.allInput();
+        const selected: Record<string, unknown> = {};
+
+        for (const key of keys) {
+          if (key in input) {
+            selected[key] = input[key];
+          }
+        }
+
+        return selected;
+      },
     };
+  }
+
+  async allInput(): Promise<Record<string, unknown>> {
+    this.inputData ??= parseInput(this.raw.req.raw);
+    return this.inputData;
   }
 }
 
@@ -289,4 +320,66 @@ async function dispatchAction<Env extends object>(
   }
 
   return handler.call(controller, context) as Response | Promise<Response>;
+}
+
+async function parseInput(request: Request): Promise<Record<string, unknown>> {
+  const url = new URL(request.url);
+  const input: Record<string, unknown> = {};
+
+  url.searchParams.forEach((value, key) => {
+    input[key] = value;
+  });
+
+  if (request.method === "GET" || request.method === "HEAD") {
+    return input;
+  }
+
+  const contentType = request.headers.get("content-type") ?? "";
+  const body = request.clone();
+
+  if (contentType.includes("application/json")) {
+    const data = await body.json().catch(() => undefined);
+
+    if (isRecord(data)) {
+      return { ...input, ...data };
+    }
+
+    return input;
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    const form = await body.formData().catch(() => undefined);
+
+    if (form) {
+      form.forEach((value, key) => {
+        input[key] = value;
+      });
+    }
+  }
+
+  return input;
+}
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+
+  if (!header) {
+    return cookies;
+  }
+
+  for (const part of header.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+
+    if (!rawName) {
+      continue;
+    }
+
+    cookies[rawName] = decodeURIComponent(rawValue.join("="));
+  }
+
+  return cookies;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
