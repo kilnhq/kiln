@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import { flatten, safeParse, type BaseIssue, type BaseSchema, type InferOutput } from "valibot";
 
 export const KILN_HTTP_PACKAGE = "@kiln/http";
 
@@ -34,6 +35,18 @@ export const response = {
   },
 };
 
+export class ValidationError extends Error {
+  readonly errors: Record<string, string[]>;
+  readonly issues: BaseIssue<unknown>[];
+
+  constructor(issues: BaseIssue<unknown>[]) {
+    super("Validation failed");
+    this.name = "ValidationError";
+    this.issues = issues;
+    this.errors = normalizeValidationErrors(issues);
+  }
+}
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export class RequestContext<Env extends object = Record<string, unknown>> {
@@ -46,6 +59,9 @@ export class RequestContext<Env extends object = Record<string, unknown>> {
     input: (key: string) => Promise<unknown>;
     ip: () => string | undefined;
     only: (keys: string[]) => Promise<Record<string, unknown>>;
+    validate: <TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(
+      schema: TSchema,
+    ) => Promise<InferOutput<TSchema>>;
   };
   inputData?: Promise<Record<string, unknown>>;
 
@@ -75,6 +91,15 @@ export class RequestContext<Env extends object = Record<string, unknown>> {
         }
 
         return selected;
+      },
+      validate: async (schema) => {
+        const result = safeParse(schema, await this.allInput());
+
+        if (!result.success) {
+          throw new ValidationError(result.issues);
+        }
+
+        return result.output;
       },
     };
   }
@@ -382,4 +407,21 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeValidationErrors(issues: BaseIssue<unknown>[]): Record<string, string[]> {
+  if (issues.length === 0) {
+    return {};
+  }
+
+  const nested = flatten(issues as [BaseIssue<unknown>, ...BaseIssue<unknown>[]]).nested ?? {};
+  const errors: Record<string, string[]> = {};
+
+  for (const [key, messages] of Object.entries(nested)) {
+    if (messages) {
+      errors[key] = [...messages];
+    }
+  }
+
+  return errors;
 }

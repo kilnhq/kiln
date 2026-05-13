@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
-import { response, RouteCollection, registerRoutes } from "../src/index.ts";
+import * as v from "valibot";
+import { response, RouteCollection, registerRoutes, ValidationError } from "../src/index.ts";
 
 test("RequestContext reads headers and cookies", async () => {
   const routes = new RouteCollection();
@@ -107,4 +108,68 @@ test("RequestContext reads Cloudflare client IP headers", async () => {
 
   assert.equal(result.status, 200);
   assert.deepEqual(await result.json(), { ip: "203.0.113.10" });
+});
+
+test("RequestContext validates input with Valibot", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.post("/users", async (ctx) => {
+    const data = await ctx.request.validate(
+      v.object({
+        name: v.pipe(v.string(), v.minLength(2)),
+        email: v.pipe(v.string(), v.email()),
+      }),
+    );
+
+    return response.json(data);
+  });
+
+  registerRoutes(hono, routes);
+
+  const result = await hono.request("/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Sam", email: "sam@example.com" }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { name: "Sam", email: "sam@example.com" });
+});
+
+test("RequestContext throws ValidationError for invalid Valibot input", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+  let validationError: ValidationError | undefined;
+
+  routes.post("/users", async (ctx) => {
+    try {
+      await ctx.request.validate(
+        v.object({
+          email: v.pipe(v.string(), v.email()),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        validationError = error;
+        return response.json({ errors: error.errors }, 422);
+      }
+
+      throw error;
+    }
+
+    return response.noContent();
+  });
+
+  registerRoutes(hono, routes);
+
+  const result = await hono.request("/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "not-an-email" }),
+  });
+
+  assert.equal(result.status, 422);
+  assert.ok(validationError);
+  assert.deepEqual(Object.keys(validationError.errors), ["email"]);
 });
