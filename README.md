@@ -17,8 +17,8 @@ import { Route, registerRoutes } from "@kiln/http";
 Route.get("/", (c) => c.json({ ok: true })).name("home");
 
 Route.prefix("/api").group(() => {
-  Route.get("/projects/:id", (c) => {
-    return c.json({ id: c.req.param("id") });
+  Route.get("/projects/:id", (ctx) => {
+    return Response.json({ id: ctx.params.id });
   }).middleware("auth");
 });
 
