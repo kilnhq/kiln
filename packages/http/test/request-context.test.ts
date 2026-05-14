@@ -173,3 +173,29 @@ test("RequestContext throws ValidationError for invalid Valibot input", async ()
   assert.ok(validationError);
   assert.deepEqual(Object.keys(validationError.errors), ["email"]);
 });
+
+test("RequestContext validation errors render as structured 422 responses", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.post("/users", async (ctx) => {
+    await ctx.request.validate(
+      v.object({
+        email: v.pipe(v.string(), v.email()),
+      }),
+    );
+
+    return response.noContent();
+  });
+
+  registerRoutes(hono, routes);
+
+  const result = await hono.request("/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "not-an-email" }),
+  });
+
+  assert.equal(result.status, 422);
+  assert.deepEqual(Object.keys((await result.json()).errors), ["email"]);
+});

@@ -47,6 +47,49 @@ export class ValidationError extends Error {
   }
 }
 
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+export class NotFoundError extends HttpError {
+  constructor(message = "Not Found") {
+    super(404, message);
+    this.name = "NotFoundError";
+  }
+}
+
+export class ControllerMethodNotFoundError extends HttpError {
+  constructor(controller: string, method: string) {
+    super(500, `Controller method not found: ${controller}.${method}`);
+    this.name = "ControllerMethodNotFoundError";
+  }
+}
+
+export class UnknownMiddlewareError extends HttpError {
+  constructor(name: string) {
+    super(500, `Unknown middleware: ${name}`);
+    this.name = "UnknownMiddlewareError";
+  }
+}
+
+export function renderException(error: unknown): Response {
+  if (error instanceof ValidationError) {
+    return response.json({ errors: error.errors }, 422);
+  }
+
+  if (error instanceof HttpError) {
+    return response.json({ message: error.message }, error.status);
+  }
+
+  return response.json({ message: "Server error" }, 500);
+}
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export class RequestContext<Env extends object = Record<string, unknown>> {
@@ -214,6 +257,8 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
   }
 
   register(hono: Hono<{ Bindings: Env }>): void {
+    hono.onError((error) => renderException(error));
+
     for (const route of this.routes) {
       const handler = (context: Context<{ Bindings: Env }>) => this.runRoute(context, route);
 
@@ -274,7 +319,7 @@ export class RouteCollection<Env extends object = Record<string, unknown>> {
       const middleware = this.namedMiddleware.get(reference);
 
       if (!middleware) {
-        throw new Error(`Unknown middleware: ${reference}`);
+        throw new UnknownMiddlewareError(reference);
       }
 
       return middleware;
@@ -341,7 +386,7 @@ async function dispatchAction<Env extends object>(
   const handler = (controller as Record<string, unknown>)[method];
 
   if (typeof handler !== "function") {
-    throw new Error(`Controller method not found: ${Controller.name}.${method}`);
+    throw new ControllerMethodNotFoundError(Controller.name, method);
   }
 
   return handler.call(controller, context) as Response | Promise<Response>;

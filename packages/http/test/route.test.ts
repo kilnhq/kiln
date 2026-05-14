@@ -216,4 +216,20 @@ test("RouteCollection errors when controller method is missing", async () => {
   const response = await hono.request("/users/123");
 
   assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    message: "Controller method not found: UserController.show",
+  });
+});
+
+test("RouteCollection renders unknown middleware errors", async () => {
+  const routes = new RouteCollection();
+  const hono = new Hono();
+
+  routes.get("/dashboard", () => httpResponse.noContent()).middleware("missing");
+  registerRoutes(hono, routes);
+
+  const response = await hono.request("/dashboard");
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { message: "Unknown middleware: missing" });
 });
